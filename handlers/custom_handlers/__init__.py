@@ -1,5 +1,4 @@
-from . import survey
-from . import lowprice
+from . import price
 from . import hello_world
-# from . import hello
-from . import highprice
+from . import bestdeals
+from . import history
