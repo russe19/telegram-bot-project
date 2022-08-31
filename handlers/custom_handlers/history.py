@@ -9,7 +9,7 @@ from loader import bot
 
 @bot.message_handler(regexp=r"^История поиска отелей$")
 @bot.message_handler(commands=['history'])
-def lowprice_command(message: Message) -> None:  # Вводим команду history
+def sql_history(message: Message) -> None:  # Вводим команду history
     """
     Функция позволяет получать из базы данных результаты поиска последней введенной команды.
     Args:
@@ -17,6 +17,7 @@ def lowprice_command(message: Message) -> None:  # Вводим команду h
 
     """
     connect = sqlite3.connect('database/database.db')
+    cursor = connect.cursor()
     cursor = connect.cursor()
     bot.send_message(message.chat.id, "Последняя запрошенная команда:")
     for max_time in cursor.execute("SELECT MAX(time) FROM data"):

@@ -1,15 +1,18 @@
-from telebot.types import Message
 from telebot import types
-from loader import bot
+from telebot.types import Message
+
 from keyboards.reply.start_keyboard import start_key
-import photo
+from loader import bot
 
 media = []
 @bot.message_handler(commands=['start'])
-def bot_start(message: Message):
+def bot_start(message: Message) -> None:
+    """
+    Функция начала работы телеграмм бота, которая выводит клавиатуру с доступными командами.
+    Args:
+        message: Команда start от пользователя.
+
+    """
     markup = start_key()
-    file = open("photo/menu.jpg", 'rb')
-    media.append(types.InputMediaPhoto(media=file, caption="Добро пожаловать в главное меню!"))
-    bot.send_media_group(message.from_user.id, media)
-    bot.send_message(message.from_user.id, text = 'Для продолжения выберите нужную команду:', reply_markup=markup)
+    bot.send_message(message.from_user.id, text = 'Добро пожаловать в главное меню!\nДля продолжения выберите нужную команду:', reply_markup=markup)
 

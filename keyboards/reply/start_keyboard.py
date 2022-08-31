@@ -3,6 +3,8 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 def start_key() -> ReplyKeyboardMarkup:
     """
     Функция создает клавиатуру, в которую можно отправить одну из основных команд.
+    Returns:
+        markup: Клавиатура с доступными командами.
 
     """
     markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
