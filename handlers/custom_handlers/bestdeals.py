@@ -1,40 +1,53 @@
-from keyboards.reply.contact import request_contact
+import calendar
+import json
+import re
+import sqlite3
+from datetime import date, datetime
+from typing import Tuple
+
+from loguru import logger
+from telebot import types
+from telebot.types import Message, CallbackQuery
+from telegram_bot_calendar import LSTEP, DetailedTelegramCalendar
+
+import api_requests
+from database.sqlite_command import insert_db
 from keyboards.inline import city, yes_no
 from loader import bot
 from states.contact_information import UserInfoState
-from telebot.types import Message
-from telegram_bot_calendar import DetailedTelegramCalendar, LSTEP
-from telebot import types
-import api_requests
-import re
-import json
-import calendar
-import sqlite3
-from datetime import datetime, date
-from database.sqlite_command import sqlite
-from loguru import logger
-"""
-Функция lowprice_search используется ближе к концу кода, она нужна чтобы по городу найти id
-Функции начинающиеся на result нужны чтобы найти необходимую информацию, когда бот уже получил все
-необходимые данные, сначала идет result, а зетем в зависимости от ответа на вопрос про вывод фото "Да" или "Нет" 
-выполняется соответствующая функция result_no или result_yes. Пока реализовал только так)
-"""
 
 
-"""
-Начало
-"""
+def info(text: dict) -> Tuple[str, str, str, str, str]:
+    """
+    Функция предназначена для того, чтобы находить в тексте с помощью регулярных выражений
+    необходимые параметры, и выводить их в ответ на запрос телеграмм бота.
+    Args:
+        text: Словарь полученный из модифицированного JSON-объекта, в котором содержится
+            вся информация по заданному отелю.
 
-def info(text):
-    h_name = re.search(r"(?<='name': ')[^']+", str(text))
-    h_street = re.search(r"(?<='streetAddress': ')[^']+", str(text))
-    h_dist = re.search(r"(?<='distance': ')[^']+", str(text['landmarks']))
-    h_cost = re.search(r"(?<='current': ')[^']+", str(text['ratePlan']))
-    h_id = (re.search(r"(?<='id': )\w+", str(text)))
+    Returns:
+        Функция возращает название отеля, улицу на которой он расположен, расстояние до центра,
+            стоимость проживания за сутки и id отеля.
+    """
+    h_name = re.search(r"(?<='name': ')[^']+", str(text)) # Название отеля
+    h_street = re.search(r"(?<='streetAddress': ')[^']+", str(text)) # Улица
+    h_dist = re.search(r"(?<='distance': ')[^']+", str(text['landmarks'])) # Расстояние до центра
+    h_cost = re.search(r"(?<='current': ')[^']+", str(text['ratePlan'])) # Стоимость за ночь
+    h_id = (re.search(r"(?<='id': )\w+", str(text))) # ID отеля
     return h_name.group(), h_street.group(), h_dist.group(), h_cost.group(), h_id.group()
 
+def find_photo(endpoint: str, hotel_id: str, photo_count: int) -> list:
+    """
+    Функция по id отеля находит определенное количество фотографий.
+    Args:
+        endpoint: Эндпоинт для запроса к API, чтобы найти фото необходимого отеля.
+        hotel_id: ID отеля.
+        photo_count: Необходимое количество фотографий.
 
-def find_photo(endpoint, hotel_id, photo_count):
+    Returns:
+        photo_list: Список с необходимым количеством фотографий по отелю.
+
+    """
     mod_photo = api_requests.location_processing(endpoint=endpoint, hotel_id=hotel_id)
     mod_list = re.findall(r"(?<='baseUrl': ')\S+", str(mod_photo))
     photo_list = [i[:-2].format(size='z') for j, i in enumerate(mod_list) if j < photo_count]
@@ -44,6 +57,12 @@ def find_photo(endpoint, hotel_id, photo_count):
 @bot.message_handler(regexp=r"^Список отелей по цене и расположению$")
 @bot.message_handler(commands=['bestdeal'])
 def lowprice_command(message: Message) -> None:  # Вводим команду lowprice
+    """
+    Функция получает команду на поиск отеля по цене и расположению от пользователя, и просит ввести город.
+    Args:
+        message: Команда полученная от пользователя
+
+    """
     bot.set_state(message.from_user.id, UserInfoState.low_city, message.chat.id)
     bot.send_message(message.chat.id, f"Привет {message.from_user.first_name}, введи свой город")  # Вводим город
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Да или Нет записываем в список
@@ -54,6 +73,12 @@ def lowprice_command(message: Message) -> None:  # Вводим команду l
 
 @bot.message_handler(state=UserInfoState.low_price)
 def bestdead_low_price(message: Message) -> None:  # Вводим кол_во отелей
+    """
+    Функция получает минимально-допустимую цену от пользователя, и просит ввести максимально-допустимую цену за отель.
+    Args:
+        message: Минимально-допустимая цена за отель, полученная от пользователя.
+
+    """
     if not message.text.isdigit() or int(message.text) <= 0:
         bot.send_message(message.chat.id, 'Минимальная цена является положительным числом')
     else:
@@ -65,6 +90,12 @@ def bestdead_low_price(message: Message) -> None:  # Вводим кол_во о
 
 @bot.message_handler(state=UserInfoState.high_price)
 def bestdead_high_price(message: Message) -> None:  # Максимальная цена
+    """
+    Функция получает максимально-допустимую цену от пользователя, и просит ввести минимально-допустимое расстояние от центра до отеля.
+    Args:
+        message: Максимально-допустимая цена за отель, полученная от пользователя.
+
+    """
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Берем кол-во отелей
         data_low['high_price'] = message.text
     if not message.text.isdigit() or int(message.text) <= 0:
@@ -78,6 +109,12 @@ def bestdead_high_price(message: Message) -> None:  # Максимальная �
 
 @bot.message_handler(state=UserInfoState.low_dist)
 def bestdead_high_price(message: Message) -> None:  # Вводим кол_во отелей
+    """
+    Функция получает минимально-допустимое расстояние от центра до отеля от пользователя, и просит ввести максимально-допустимое расстояние.
+    Args:
+        message: Минимально-допустимое расстояние от центра до отеля, полученное от пользователя.
+
+    """
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Берем кол-во отелей
         data_low['low_dist'] = message.text
     bot.send_message(message.chat.id, f'Введите максимальное расстояние до отеля')
@@ -86,6 +123,12 @@ def bestdead_high_price(message: Message) -> None:  # Вводим кол_во �
 
 @bot.message_handler(state=UserInfoState.high_dist)
 def bestdead_high_price(message: Message) -> None:  # Вводим кол_во отелей
+    """
+    Функция получает максимально-допустимое расстояние от центра до отеля от пользователя, и просит ввести выводимое в запросе необходимое количество отелей.
+    Args:
+        message:
+
+    """
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Берем кол-во отелей
         data_low['high_dist'] = message.text
     bot.send_message(message.chat.id, f'Сколько отелей необходимо вывести в результате?')
@@ -96,7 +139,20 @@ def bestdead_high_price(message: Message) -> None:  # Вводим кол_во �
 # def count_p(message: Message) -> None:  # Вводим необходимое кол-во фотографий
 #     print(341)
 
-def result_bestdeal(choice_photo, text, callback, low_dist, high_dist, best_hotels):
+def result_bestdeal(choice_photo: str, text: dict, callback: CallbackQuery, low_dist: str, high_dist: str, best_hotels: list) -> None:
+    """
+
+    Args:
+        choice_photo: Ответ на то, нужно ли в конце запроса выводить фотографии, или нет.
+        text: Список, полученный из запроса к API, и содержащий всю ниформацию по заданному городу.
+        callback: Последний ответ от нашего телеграмм бота, необходимый для отправки ему сообщений.
+        low_dist: Минимально_допустимое расстояние до отеля.
+        high_dist: Максимально_допустимое расстояние до отеля.
+        best_hotels: Список с отелями, которые подходят по всем заданным параметрам.
+
+    Returns:
+        best_hotels: Список с отелями, которые подходят по всем заданным параметрам.
+    """
     for i in text['data']["body"]["searchResults"]["results"]:
         print(i)
         dist = re.search(r"[0-9,]+", i['landmarks'][0]['distance'])
@@ -106,14 +162,29 @@ def result_bestdeal(choice_photo, text, callback, low_dist, high_dist, best_hote
     return best_hotels
 
 
-def best_result_photo(choice_photo, mod_list, callback) -> None:
+def best_result_photo(choice_photo: str, mod_list: list, callback: CallbackQuery) -> None:
+    """
+    Функция, которая в зависимости от того, нужно ли выводить фото отелей или нет, ссылает на другую функцию.
+    Args:
+        choice_photo: Ответ на то, нужно ли в конце запроса выводить фотографии, или нет.
+        mod_list: Список, полученный из запроса к API, и содержащий всю ниформацию по заданному городу.
+        callback: Последний ответ от нашего телеграмм бота, необходимый для отправки ему сообщений.
+
+    """
     if choice_photo == 'yes':
         best_result_yes(mod_list, callback)
     else:
         best_result_no(mod_list, callback)
 
 
-def best_result_no(mod_list, callback):
+def best_result_no(mod_list: list, callback: CallbackQuery) -> None:
+    """
+    Функция, в которой формируется ответ на полученные данные, если в результате запроса не нужно выводить фотографии отеля.
+    Args:
+        mod_list: Список, полученный из запроса к API, и содержащий всю ниформацию по заданному городу.
+        callback: Последний ответ от нашего телеграмм бота, необходимый для отправки ему сообщений.
+
+    """
     count = 0
     hotels = []
     for j in mod_list:
@@ -134,10 +205,19 @@ def best_result_no(mod_list, callback):
         bot.send_message(callback.message.chat.id, f"К сожалению по вашеву запросу не найдены отели")
     elif count < number_of_hotels:
         bot.send_message(callback.message.chat.id, f"К сожалению по вашеву запросу не найдено необходимое кол-во отелей")
-    sqlite(command, time, hotels)
+    insert_db(command, time, hotels)
 
 
-def best_result_yes(mod_list, callback):
+def best_result_yes(mod_list: list, callback: CallbackQuery) -> None:
+    """
+    Функция, в которой формируется ответ на полученные данные, если в результате запроса нужно выводить фотографии отеля.
+    Args:
+        mod_list: Список, полученный из запроса к API, и содержащий всю ниформацию по заданному городу.
+        callback: Последний ответ от нашего телеграмм бота, необходимый для отправки ему сообщений.
+
+    Returns:
+
+    """
     count = 0
     media = []
     hotels = []
@@ -165,4 +245,4 @@ def best_result_yes(mod_list, callback):
         bot.send_message(callback.message.chat.id, f"К сожалению по вашеву запросу не найдены отели")
     elif count < number_of_hotels:
         bot.send_message(callback.message.chat.id, f"К сожалению по вашеву запросу не найдено необходимое кол-во отелей")
-    sqlite(command, time, hotels)
+    insert_db(command, time, hotels)
