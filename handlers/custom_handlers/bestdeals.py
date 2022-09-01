@@ -198,7 +198,8 @@ def best_result_no(mod_list: list, callback: CallbackQuery) -> None:
             all_cost = int(cost[1:]) * int(all_days)
             bot.send_message(callback.message.chat.id, f"Название отеля: {name}\nУлица: {street}\n"
                                               f"Расстояние до центра: {dist}\nСтоимость: {cost}\n"
-                                                       f"Общая стоимость ${all_cost}")
+                                                       f"Общая стоимость ${all_cost}\n"
+                                                       f"Ссылка на отель: https://hotels.com/ho{id_hotel}")
             hotels.append(name)
             count += 1
     if count == 0:
@@ -231,7 +232,8 @@ def best_result_yes(mod_list: list, callback: CallbackQuery) -> None:
             name, street, dist, cost, id_hotel = info(i)
             all_cost = int(cost[1:]) * int(all_days)
             text = f"Название отеля: {name}\nУлица: {street}\n" \
-                   f"Расстояние до центра: {dist}\nСтоимость: {cost}\nОбщая стоимость ${all_cost}"
+                   f"Расстояние до центра: {dist}\nСтоимость: {cost}\nОбщая стоимость ${all_cost}\n" \
+                   f"Ссылка на отель: https://hotels.com/ho{id_hotel}"
             hotels.append(name)
             count += 1
             photo_list = find_photo(endpoint = 'properties/get-hotel-photos', hotel_id = id_hotel, photo_count = photo_count)
