@@ -139,6 +139,6 @@ text3.json
 
 #another files
 testing.py
-debug/
-Scripts/
-debug/
+debug
+Scripts
+database/database.db
