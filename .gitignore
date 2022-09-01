@@ -140,5 +140,5 @@ text3.json
 #another files
 testing.py
 debug
-Scripts
-database/database.db
+/Scripts
+/database/database.db
