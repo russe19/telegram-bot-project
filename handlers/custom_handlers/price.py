@@ -84,7 +84,8 @@ def result_no(mod_text: dict, callback: CallbackQuery) -> None:
             all_cost = int(cost[1:]) * int(all_days)
             bot.send_message(callback.message.chat.id, f"Название отеля: {name}\nУлица: {street}\n"
                                               f"Расстояние до центра: {dist}\nСтоимость: {cost}\n"
-                                                       f"Общая стоимость ${all_cost}")
+                                                       f"Общая стоимость ${all_cost}\n"
+                                                       f"Ссылка на отель: https://hotels.com/ho{id_hotel}")
             hotels.append(name)
             count += 1
     insert_db(command, time, hotels)
@@ -114,7 +115,8 @@ def result_yes(mod_text: dict, callback: CallbackQuery) -> None:
             name, street, dist, cost, id_hotel = info(i)
             all_cost = int(cost[1:]) * int(all_days)
             text = f"Название отеля: {name}\nУлица: {street}\n" \
-                   f"Расстояние до центра: {dist}\nСтоимость: {cost}\nОбщая стоимость ${all_cost}"
+                   f"Расстояние до центра: {dist}\nСтоимость: {cost}\n" \
+                   f"Общая стоимость ${all_cost}\nСсылка на отель: https://hotels.com/ho{id_hotel}"
             hotels.append(name)
             count += 1
             photo_list = find_photo(endpoint = 'properties/get-hotel-photos', hotel_id = id_hotel, photo_count = photo_count)
@@ -228,6 +230,7 @@ def callback_photo_choice(callback: CallbackQuery) -> None:
         callback: "Да" или "Нет"
 
     """
+    bot.delete_message(callback.message.chat.id, callback.message.id)
     with bot.retrieve_data(callback.from_user.id, callback.message.chat.id) as data_low:  # Фото, да или нет, в список
         data_low['choice_photo'] = callback.data
     if callback.data == 'yes':
@@ -270,9 +273,11 @@ def call_date(callback: CallbackQuery) -> None:
         callback: Получает от пользователя в качестве колбека созданную клавиатуру.
 
     """
-    result, key, step = DetailedTelegramCalendar(calendar_id=1, locale='ru').process(callback.data)
+    all_steps = {'y': 'год', 'm': 'месяц', 'd': 'день'}
+    today = date.today()
+    result, key, step = DetailedTelegramCalendar(calendar_id=1, locale='ru', min_date=today).process(callback.data)
     if not result and key:
-        bot.edit_message_text(f"Выбор {LSTEP[step]}", callback.message.chat.id,
+        bot.edit_message_text(f"Выберите {all_steps[step]}", callback.message.chat.id,
                               callback.message.message_id, reply_markup=key)
     elif result:
         bot.edit_message_text(f"Дата заселения {result}\nТеперь выберите дату, когда бы вы хотели выселиться", callback.message.chat.id, callback.message.message_id)
@@ -293,16 +298,20 @@ def call_date_1(callback: CallbackQuery) -> None:
         callback: Получает от пользователя в качестве колбека созданную клавиатуру.
 
     """
-    result, key, step = DetailedTelegramCalendar(calendar_id=2, locale='ru').process(callback.data)
+    all_steps = {'y':'год', 'm':'месяц', 'd':'день'}
+    today = date.today()
+    result, key, step = DetailedTelegramCalendar(calendar_id=2, locale='ru', min_date=today).process(callback.data)
     with bot.retrieve_data(callback.from_user.id, callback.message.chat.id) as data_low:  # Дата заселения
         checkin_date = data_low['checkin']
         data_low['checkout'] = result
     if not result and key:
-        bot.edit_message_text(f"Выбор {LSTEP[step]}", callback.message.chat.id,
+        bot.edit_message_text(f"Выберите {all_steps[step]}", callback.message.chat.id,
                               callback.message.message_id, reply_markup=key)
     elif result and (checkin_date > result):
         bot.send_message(callback.message.chat.id, "Дата заселения в отель должна быть раньше, исправьте")
     elif result:
+        bot.edit_message_text(f"Дата выселение {result}\n", callback.message.chat.id, callback.message.message_id)
+        bot.send_message(callback.message.chat.id, "Пожалуйста подождите, бот формирует ответ на ваш запрос")
         with bot.retrieve_data(callback.from_user.id, callback.message.chat.id) as data_low:
             if data_low['command'] != 'bestdeal':
                 if data_low['command'] == "lowprice":
