@@ -35,3 +35,5 @@ class UserInfoState(StatesGroup):
     low_dist = State()
     high_dist = State()
     bestdeal_result = State()
+    locale = State()
+    currency = State()

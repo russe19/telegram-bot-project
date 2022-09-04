@@ -63,8 +63,9 @@ def lowprice_command(message: Message) -> None:  # Вводим команду l
         message: Команда полученная от пользователя
 
     """
-    bot.set_state(message.from_user.id, UserInfoState.low_city, message.chat.id)
-    bot.send_message(message.chat.id, f"Привет {message.from_user.first_name}, введи свой город")  # Вводим город
+    bot.set_state(message.from_user.id, UserInfoState.locale, message.chat.id)
+    bot.send_message(message.chat.id, f"Привет {message.from_user.first_name}, "
+                                      f"введи на каком языке вы хотите вводить город")  # Вводим город
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Да или Нет записываем в список
         if message.text == "Список отелей по цене и расположению" or message.text == "/bestdeal":
             data_low['command'] = "bestdeal"
@@ -195,10 +196,10 @@ def best_result_no(mod_list: list, callback: CallbackQuery) -> None:
     for i in mod_list:
         if count < number_of_hotels:
             name, street, dist, cost, id_hotel = info(i)
-            all_cost = int(cost[1:]) * int(all_days)
+            all_cost = int(re.search(r"\d+", cost).group()) * int(all_days)
             bot.send_message(callback.message.chat.id, f"Название отеля: {name}\nУлица: {street}\n"
                                               f"Расстояние до центра: {dist}\nСтоимость: {cost}\n"
-                                                       f"Общая стоимость ${all_cost}\n"
+                                                       f"Общая стоимость {all_cost} {data_low['currency']}\n"
                                                        f"Ссылка на отель: https://hotels.com/ho{id_hotel}")
             hotels.append(name)
             count += 1
@@ -206,6 +207,10 @@ def best_result_no(mod_list: list, callback: CallbackQuery) -> None:
         bot.send_message(callback.message.chat.id, f"К сожалению по вашеву запросу не найдены отели")
     elif count < number_of_hotels:
         bot.send_message(callback.message.chat.id, f"К сожалению по вашеву запросу не найдено необходимое кол-во отелей")
+    bot.send_message(callback.message.chat.id, "Запрос выполнен, выберете следующую команду\n"
+                                               "/lowprice - список дешевых отелей\n/highprice - список дорогих отелей\n"
+                                               "/bestdeal - список отелей по стоимости и расстоянию до цента\n"
+                                               "/history - ответ на последний полученный запрос")
     insert_db(command, time, hotels)
 
 
@@ -230,9 +235,10 @@ def best_result_yes(mod_list: list, callback: CallbackQuery) -> None:
     for i in mod_list:
         if count < number_of_hotels:
             name, street, dist, cost, id_hotel = info(i)
-            all_cost = int(cost[1:]) * int(all_days)
+            all_cost = int(re.search(r"\d+", cost).group()) * int(all_days)
             text = f"Название отеля: {name}\nУлица: {street}\n" \
-                   f"Расстояние до центра: {dist}\nСтоимость: {cost}\nОбщая стоимость ${all_cost}\n" \
+                   f"Расстояние до центра: {dist}\nСтоимость: {cost}\n" \
+                   f"Общая стоимость {all_cost} {data_low['currency']}\n" \
                    f"Ссылка на отель: https://hotels.com/ho{id_hotel}"
             hotels.append(name)
             count += 1
@@ -247,4 +253,8 @@ def best_result_yes(mod_list: list, callback: CallbackQuery) -> None:
         bot.send_message(callback.message.chat.id, f"К сожалению по вашеву запросу не найдены отели")
     elif count < number_of_hotels:
         bot.send_message(callback.message.chat.id, f"К сожалению по вашеву запросу не найдено необходимое кол-во отелей")
+    bot.send_message(callback.message.chat.id, "Запрос выполнен, выберете следующую команду\n"
+                                               "/lowprice - список дешевых отелей\n/highprice - список дорогих отелей\n"
+                                               "/bestdeal - список отелей по стоимости и расстоянию до цента\n"
+                                               "/history - ответ на последний полученный запрос")
     insert_db(command, time, hotels)

@@ -24,28 +24,31 @@ def json_mod(text, file_name):
 
 
 
-def location_processing(endpoint, city=None, city_id=None, checkin=None, checkout=None, sort_order=None,
-                        hotel_id=None, price_min=None, price_max=None, number=None):  # функция для поиска id города
-    search_city = api_requests(endpoint, city, city_id, checkin, checkout, sort_order, hotel_id, price_min, price_max, number)  # через API Hotels ищем всю информацию по городу
+def location_processing(endpoint, locale=None, currency=None, city=None, city_id=None, checkin=None, checkout=None, sort_order=None,
+                        hotel_id=None, price_min=None, price_max=None,
+                        number=None):  # функция для поиска id города
+    search_city = api_requests(endpoint, locale, currency, city, city_id, checkin,
+                               checkout, sort_order, hotel_id, price_min, price_max,
+                               number, )  # через API Hotels ищем всю информацию по городу
     mod_search_city = json.loads(search_city)  # Преобразовываем текст с помощью команд можуля json
     return mod_search_city
 
 
-def api_requests(endpoint, city=None, city_id=None, checkin=None, checkout=None, sort_order=None,
+def api_requests(endpoint, locale=None, currency=None, city=None, city_id=None, checkin=None, checkout=None, sort_order=None,
                  hotel_id=None, price_min=None, price_max=None, number=None):
     url = f"https://hotels4.p.rapidapi.com/{endpoint}"
     querystring = {}
 
     if endpoint == 'locations/v2/search':
-        querystring = {"query": city, "locale": 'ru_RU', "currency": "USD"}
+        querystring = {"query": city, "locale": locale, "currency": currency}
     elif endpoint == 'properties/list' and sort_order == 'STAR_RATING_HIGHEST_FIRST':
         querystring = {"destinationId": city_id, "pageNumber": f"{number}", "pageSize": "25", "checkIn": checkin,
                        "checkOut": checkout, "adults1": "1", "priceMin": price_min, "priceMax": price_max,
-                       "sortOrder": sort_order, "locale": "ru_RU", "currency": "USD", "landmarkIds": "Центр города"}
+                       "sortOrder": sort_order, "locale": locale, "currency": currency, "landmarkIds": "Центр города"}
     elif endpoint == 'properties/list':
         querystring = {"destinationId": city_id, "pageNumber": "1", "pageSize": "25", "checkIn": checkin,
-                       "checkOut": checkout, "adults1": "1", "sortOrder": sort_order, "locale": "ru_RU",
-                       "currency": "USD"}
+                       "checkOut": checkout, "adults1": "1", "sortOrder": sort_order, "locale": locale,
+                       "currency": currency}
     elif endpoint == 'properties/get-hotel-photos':
         querystring = {"id": hotel_id}
 
@@ -58,7 +61,7 @@ def api_requests(endpoint, city=None, city_id=None, checkin=None, checkout=None,
         response = requests.request("GET", url, headers=headers, params=querystring, timeout=10)
         return response.text
     except requests.exceptions.RequestException as exc:
-        logger.exception(exc)
+        logger.debug(exc)
         return False
 
 
