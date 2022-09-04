@@ -25,3 +25,7 @@ def sql_history(message: Message) -> None:  # Вводим команду histor
             bot.send_message(message.chat.id, f"Команда: {answer[0]}\n"
                                               f"Время вызова команды: {answer[1]}\nПолученный отель: {answer[2]}")
     connect.commit()
+    bot.send_message(message.chat.id, "Запрос выполнен, выберете следующую команду\n"
+                                               "/lowprice - список дешевых отелей\n/highprice - список дорогих отелей\n"
+                                               "/bestdeal - список отелей по стоимости и расстоянию до цента\n"
+                                               "/history - ответ на последний полученный запрос")
