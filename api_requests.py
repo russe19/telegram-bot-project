@@ -8,8 +8,8 @@ endpoint_search = 'locations/v2/search'
 endpoint_hotels = 'properties/list'
 endpoint_photo = 'properties/get-hotel-photos'
 
-logger.add("debug/debug.log", format="{time} {level} {message}", level="DEBUG",
-           rotation="100 MB", compression="zip", serialize=True)
+logger.add("debug/debug.log", format="{time} | {level} | ID пользователя - {message}", level="INFO",
+           rotation="100 MB", compression="zip")
 
 def json_mod(text, file_name):
     data = json.loads(text)
@@ -26,16 +26,16 @@ def json_mod(text, file_name):
 
 def location_processing(endpoint, locale=None, currency=None, city=None, city_id=None, checkin=None, checkout=None, sort_order=None,
                         hotel_id=None, price_min=None, price_max=None,
-                        number=None):  # функция для поиска id города
+                        number=None, user=None):  # функция для поиска id города
     search_city = api_requests(endpoint, locale, currency, city, city_id, checkin,
                                checkout, sort_order, hotel_id, price_min, price_max,
-                               number, )  # через API Hotels ищем всю информацию по городу
+                               number, user)  # через API Hotels ищем всю информацию по городу
     mod_search_city = json.loads(search_city)  # Преобразовываем текст с помощью команд можуля json
     return mod_search_city
 
 
 def api_requests(endpoint, locale=None, currency=None, city=None, city_id=None, checkin=None, checkout=None, sort_order=None,
-                 hotel_id=None, price_min=None, price_max=None, number=None):
+                 hotel_id=None, price_min=None, price_max=None, number=None, user=None):
     url = f"https://hotels4.p.rapidapi.com/{endpoint}"
     querystring = {}
 
@@ -58,12 +58,12 @@ def api_requests(endpoint, locale=None, currency=None, city=None, city_id=None, 
     }
 
     try:
-        response = requests.request("GET", url, headers=headers, params=querystring, timeout=10)
+        response = requests.request("GET", url, headers=headers, params=querystring, timeout=30)
         return response.text
     except requests.exceptions.RequestException as exc:
-        logger.debug(exc)
+        logger.info(user)
         return False
 
 
 
-t = location_processing(city='Нью-Йорк', endpoint=endpoint_search)
+# t = location_processing(city='Нью-Йорк', endpoint=endpoint_search)

@@ -12,10 +12,16 @@ from telegram_bot_calendar import LSTEP, DetailedTelegramCalendar
 
 import api_requests
 from database.sqlite_command import insert_db
-from keyboards.inline import city, yes_no
+from keyboards.inline import city, yes_no, currency, locale
 from loader import bot
 from states.contact_information import UserInfoState
 
+
+sample_locales = {'Английский': 'en_US', 'Французский': 'fr_FR', 'Испанский': 'es_ES',
+                  'Португальский': 'pt_PT', 'Немецкий': 'de_DE', 'Русский': 'ru_RU'
+}
+
+sample_currency = {'Рубль': 'RUB', 'Евро': 'EUR', 'Доллар': 'USD'}
 
 def info(text: dict) -> Tuple[str, str, str, str, str]:
     """
@@ -58,14 +64,15 @@ def find_photo(endpoint: str, hotel_id: str, photo_count: int) -> list:
 @bot.message_handler(commands=['bestdeal'])
 def lowprice_command(message: Message) -> None:  # Вводим команду lowprice
     """
-    Функция получает команду на поиск отеля по цене и расположению от пользователя, и просит ввести город.
+    Функция получает команду на поиск отеля по цене и расположению от пользователя, и просит выбрать язык.
     Args:
         message: Команда полученная от пользователя
 
     """
     bot.set_state(message.from_user.id, UserInfoState.locale, message.chat.id)
-    bot.send_message(message.chat.id, f"Привет {message.from_user.first_name}, "
-                                      f"введи на каком языке вы хотите вводить город")  # Вводим город
+    # bot.send_message(message.chat.id, f"Привет {message.from_user.first_name}, "
+    #                                   f"введи на каком языке вы хотите вводить город")  # Вводим город
+    locale.locale_keyboard(message, sample_locales)
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Да или Нет записываем в список
         if message.text == "Список отелей по цене и расположению" or message.text == "/bestdeal":
             data_low['command'] = "bestdeal"
@@ -196,7 +203,8 @@ def best_result_no(mod_list: list, callback: CallbackQuery) -> None:
     for i in mod_list:
         if count < number_of_hotels:
             name, street, dist, cost, id_hotel = info(i)
-            all_cost = int(re.search(r"\d+", cost).group()) * int(all_days)
+            cost = cost.replace(',', '')
+            all_cost = int(''.join(re.findall(r"[\d+]", cost))) * int(all_days)
             bot.send_message(callback.message.chat.id, f"Название отеля: {name}\nУлица: {street}\n"
                                               f"Расстояние до центра: {dist}\nСтоимость: {cost}\n"
                                                        f"Общая стоимость {all_cost} {data_low['currency']}\n"
@@ -235,7 +243,7 @@ def best_result_yes(mod_list: list, callback: CallbackQuery) -> None:
     for i in mod_list:
         if count < number_of_hotels:
             name, street, dist, cost, id_hotel = info(i)
-            all_cost = int(re.search(r"\d+", cost).group()) * int(all_days)
+            all_cost = int(''.join(re.findall(r"[\d+]", cost))) * int(all_days)
             text = f"Название отеля: {name}\nУлица: {street}\n" \
                    f"Расстояние до центра: {dist}\nСтоимость: {cost}\n" \
                    f"Общая стоимость {all_cost} {data_low['currency']}\n" \
