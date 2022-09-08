@@ -2,14 +2,12 @@ from config_data import config
 import requests
 import json
 import re
-from loguru import logger
+from loader import logger
 
 endpoint_search = 'locations/v2/search'
 endpoint_hotels = 'properties/list'
 endpoint_photo = 'properties/get-hotel-photos'
 
-logger.add("debug/debug.log", format="{time} | {level} | ID пользователя - {message}", level="INFO",
-           rotation="100 MB", compression="zip")
 
 def json_mod(text, file_name):
     data = json.loads(text)
@@ -61,7 +59,7 @@ def api_requests(endpoint, locale=None, currency=None, city=None, city_id=None, 
         response = requests.request("GET", url, headers=headers, params=querystring, timeout=30)
         return response.text
     except requests.exceptions.RequestException as exc:
-        logger.info(user)
+        logger.error("ID пользователя - {user} | Ошибка при обращении к API", user=user)
         return False
 
 
