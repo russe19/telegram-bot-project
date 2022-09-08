@@ -5,19 +5,24 @@ import sqlite3
 from datetime import date, datetime
 from typing import Tuple
 
-from loguru import logger
 from telebot import types
 from telebot.types import Message, CallbackQuery
 from telegram_bot_calendar import LSTEP, DetailedTelegramCalendar
 
 import api_requests
 from database.sqlite_command import insert_db
-from keyboards.inline import city, yes_no
-from loader import bot
+from keyboards.inline import city, yes_no, currency, locale
+from loader import bot, logger
 from states.contact_information import UserInfoState
 
 
-def info(text: dict) -> Tuple[str, str, str, str, str]:
+sample_locales = {'Английский': 'en_US', 'Французский': 'fr_FR', 'Испанский': 'es_ES',
+                  'Португальский': 'pt_PT', 'Немецкий': 'de_DE', 'Русский': 'ru_RU'
+}
+
+sample_currency = {'Рубль': 'RUB', 'Евро': 'EUR', 'Доллар': 'USD'}
+
+def info(text: dict, callback: CallbackQuery) -> Tuple[str, str, str, str, str]:
     """
     Функция предназначена для того, чтобы находить в тексте с помощью регулярных выражений
     необходимые параметры, и выводить их в ответ на запрос телеграмм бота.
@@ -29,12 +34,42 @@ def info(text: dict) -> Tuple[str, str, str, str, str]:
         Функция возращает название отеля, улицу на которой он расположен, расстояние до центра,
             стоимость проживания за сутки и id отеля.
     """
-    h_name = re.search(r"(?<='name': ')[^']+", str(text)) # Название отеля
-    h_street = re.search(r"(?<='streetAddress': ')[^']+", str(text)) # Улица
-    h_dist = re.search(r"(?<='distance': ')[^']+", str(text['landmarks'])) # Расстояние до центра
-    h_cost = re.search(r"(?<='current': ')[^']+", str(text['ratePlan'])) # Стоимость за ночь
-    h_id = (re.search(r"(?<='id': )\w+", str(text))) # ID отеля
-    return h_name.group(), h_street.group(), h_dist.group(), h_cost.group(), h_id.group()
+    name, street, dist, cost, id = '', '', '', '', ''
+    try:
+        h_name = re.search(r"(?<='name': ')[^']+", str(text)) # Название отеля
+        name = h_name.group()
+    except:
+        name == ''
+        logger.info("ID пользователя - {user} | У отеля отсутствует атрибут 'имя'", user=callback.from_user.id)
+    try:
+        h_street = re.search(r"(?<='streetAddress': ')[^']+", str(text)) # Улица
+        street = h_street.group()
+    except:
+        street == ''
+        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'улица'",
+                    user=callback.from_user.id, name=name)
+    try:
+        h_dist = re.search(r"(?<='distance': ')[^']+", str(text['landmarks'])) # Расстояние до центра
+        dist = h_dist.group()
+    except:
+        dist == ''
+        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'расстояние до центра'",
+                    user=callback.from_user.id, name=name)
+    try:
+        h_cost = re.search(r"(?<='current': ')[^']+", str(text['ratePlan'])) # Стоимость за ночь
+        cost = h_cost.group()
+    except:
+        cost == ''
+        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'стоимость за ночь'",
+                    user=callback.from_user.id, name=name)
+    try:
+        h_id = (re.search(r"(?<='id': )\w+", str(text))) # ID отеля
+        id = h_id.group()
+    except:
+        id == ''
+        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'id'",
+                    user=callback.from_user.id, name=name)
+    return name, street, dist, cost, id
 
 def find_photo(endpoint: str, hotel_id: str, photo_count: int) -> list:
     """
@@ -58,14 +93,15 @@ def find_photo(endpoint: str, hotel_id: str, photo_count: int) -> list:
 @bot.message_handler(commands=['bestdeal'])
 def lowprice_command(message: Message) -> None:  # Вводим команду lowprice
     """
-    Функция получает команду на поиск отеля по цене и расположению от пользователя, и просит ввести город.
+    Функция получает команду на поиск отеля по цене и расположению от пользователя, и просит выбрать язык.
     Args:
         message: Команда полученная от пользователя
 
     """
     bot.set_state(message.from_user.id, UserInfoState.locale, message.chat.id)
-    bot.send_message(message.chat.id, f"Привет {message.from_user.first_name}, "
-                                      f"введи на каком языке вы хотите вводить город")  # Вводим город
+    # bot.send_message(message.chat.id, f"Привет {message.from_user.first_name}, "
+    #                                   f"введи на каком языке вы хотите вводить город")  # Вводим город
+    locale.locale_keyboard(message, sample_locales)
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Да или Нет записываем в список
         if message.text == "Список отелей по цене и расположению" or message.text == "/bestdeal":
             data_low['command'] = "bestdeal"
@@ -82,6 +118,7 @@ def bestdead_low_price(message: Message) -> None:  # Вводим кол_во о
     """
     if not message.text.isdigit() or int(message.text) <= 0:
         bot.send_message(message.chat.id, 'Минимальная цена является положительным числом')
+        logger.info("ID пользователя - {user} | Недопустимое значение минимальной цены", user=message.from_user.id)
     else:
         with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Берем кол-во отелей
             data_low['low_price'] = message.text
@@ -101,8 +138,10 @@ def bestdead_high_price(message: Message) -> None:  # Максимальная �
         data_low['high_price'] = message.text
     if not message.text.isdigit() or int(message.text) <= 0:
         bot.send_message(message.chat.id, 'Максимальная цена является положительным числом')
+        logger.info("ID пользователя - {user} | Максимальная цена введена неверно", user=message.from_user.id)
     elif int(message.text) <= int(data_low['low_price']):
         bot.send_message(message.chat.id, 'Максимальная цена должна быть больше минимальной')
+        logger.info("ID пользователя - {user} | Максимальная цена введена неверно", user=message.from_user.id)
     else:
         bot.send_message(message.chat.id, f'Введите минимальное расстояние до отеля')
         bot.set_state(message.from_user.id, UserInfoState.low_dist, message.chat.id)
@@ -111,29 +150,43 @@ def bestdead_high_price(message: Message) -> None:  # Максимальная �
 @bot.message_handler(state=UserInfoState.low_dist)
 def bestdead_high_price(message: Message) -> None:  # Вводим кол_во отелей
     """
-    Функция получает минимально-допустимое расстояние от центра до отеля от пользователя, и просит ввести максимально-допустимое расстояние.
+    Функция получает минимально-допустимое расстояние от центра до отеля от пользователя,
+    и просит ввести максимально-допустимое расстояние.
     Args:
         message: Минимально-допустимое расстояние от центра до отеля, полученное от пользователя.
 
     """
-    with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Берем кол-во отелей
-        data_low['low_dist'] = message.text
-    bot.send_message(message.chat.id, f'Введите максимальное расстояние до отеля')
-    bot.set_state(message.from_user.id, UserInfoState.high_dist, message.chat.id)
+    if not message.text.isdigit() or int(message.text) <= 0:
+        bot.send_message(message.chat.id, 'Минимальнаое расстояние является положительным числом')
+        logger.info("ID пользователя - {user} | Недопустимое значение минимального расстояние от центра до отеля",
+                    user=message.from_user.id)
+    else:
+        with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Берем кол-во отелей
+            data_low['low_dist'] = message.text
+        bot.send_message(message.chat.id, f'Введите максимальное расстояние до отеля')
+        bot.set_state(message.from_user.id, UserInfoState.high_dist, message.chat.id)
 
 
 @bot.message_handler(state=UserInfoState.high_dist)
-def bestdead_high_price(message: Message) -> None:  # Вводим кол_во отелей
+def bestdead_high_price(message: Message) -> None:  # Максимальное расстояние
     """
-    Функция получает максимально-допустимое расстояние от центра до отеля от пользователя, и просит ввести выводимое в запросе необходимое количество отелей.
+    Функция получает максимально-допустимое расстояние от центра до отеля от пользователя,
+    и просит ввести выводимое в запросе необходимое количество отелей.
     Args:
         message:
 
     """
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Берем кол-во отелей
         data_low['high_dist'] = message.text
-    bot.send_message(message.chat.id, f'Сколько отелей необходимо вывести в результате?')
-    bot.set_state(message.from_user.id, UserInfoState.low_number_of_hotel, message.chat.id)
+    if not message.text.isdigit() or int(message.text) <= 0:
+        bot.send_message(message.chat.id, 'Максимальное расстояние является положительным числом')
+        logger.info("ID пользователя - {user} | Максимальное расстояние введено неверно", user=message.from_user.id)
+    elif int(message.text) <= int(data_low['low_dist']):
+        bot.send_message(message.chat.id, 'Максимальное расстояние должно быть больше минимального')
+        logger.info("ID пользователя - {user} | Максимальное расстояние введено неверно", user=message.from_user.id)
+    else:
+        bot.send_message(message.chat.id, f'Сколько отелей необходимо вывести в результате?')
+        bot.set_state(message.from_user.id, UserInfoState.low_number_of_hotel, message.chat.id)
 
 
 # @bot.message_handler(state=UserInfoState.bestdeal_result)
@@ -195,8 +248,9 @@ def best_result_no(mod_list: list, callback: CallbackQuery) -> None:
         all_days = (data_low['checkout'] - data_low['checkin']).days
     for i in mod_list:
         if count < number_of_hotels:
-            name, street, dist, cost, id_hotel = info(i)
-            all_cost = int(re.search(r"\d+", cost).group()) * int(all_days)
+            name, street, dist, cost, id_hotel = info(i, callback)
+            cost = cost.replace(',', '')
+            all_cost = int(''.join(re.findall(r"[\d+]", cost))) * int(all_days)
             bot.send_message(callback.message.chat.id, f"Название отеля: {name}\nУлица: {street}\n"
                                               f"Расстояние до центра: {dist}\nСтоимость: {cost}\n"
                                                        f"Общая стоимость {all_cost} {data_low['currency']}\n"
@@ -204,9 +258,11 @@ def best_result_no(mod_list: list, callback: CallbackQuery) -> None:
             hotels.append(name)
             count += 1
     if count == 0:
-        bot.send_message(callback.message.chat.id, f"К сожалению по вашеву запросу не найдены отели")
+        bot.send_message(callback.message.chat.id, f"К сожалению по вашему запросу не найдены отели")
+        logger.info("ID пользователя - {user} | По данному запросу не нашлось отелей", user=callback.from_user.id)
     elif count < number_of_hotels:
-        bot.send_message(callback.message.chat.id, f"К сожалению по вашеву запросу не найдено необходимое кол-во отелей")
+        bot.send_message(callback.message.chat.id, f"К сожалению по запросу не найдено необходимое кол-во отелей")
+        logger.info("ID пользователя - {user} | Не нашлось необходимое количество отелей", user=callback.from_user.id)
     bot.send_message(callback.message.chat.id, "Запрос выполнен, выберете следующую команду\n"
                                                "/lowprice - список дешевых отелей\n/highprice - список дорогих отелей\n"
                                                "/bestdeal - список отелей по стоимости и расстоянию до цента\n"
@@ -234,8 +290,8 @@ def best_result_yes(mod_list: list, callback: CallbackQuery) -> None:
         all_days = (data_low['checkout'] - data_low['checkin']).days
     for i in mod_list:
         if count < number_of_hotels:
-            name, street, dist, cost, id_hotel = info(i)
-            all_cost = int(re.search(r"\d+", cost).group()) * int(all_days)
+            name, street, dist, cost, id_hotel = info(i, callback)
+            all_cost = int(''.join(re.findall(r"[\d+]", cost))) * int(all_days)
             text = f"Название отеля: {name}\nУлица: {street}\n" \
                    f"Расстояние до центра: {dist}\nСтоимость: {cost}\n" \
                    f"Общая стоимость {all_cost} {data_low['currency']}\n" \
@@ -250,9 +306,11 @@ def best_result_yes(mod_list: list, callback: CallbackQuery) -> None:
             media = []
             photo_list = []
     if count == 0:
-        bot.send_message(callback.message.chat.id, f"К сожалению по вашеву запросу не найдены отели")
+        bot.send_message(callback.message.chat.id, f"К сожалению по вашему запросу не найдены отели")
+        logger.info("ID пользователя - {user} | По данному запросу не нашлось отелей", user = callback.from_user.id)
     elif count < number_of_hotels:
-        bot.send_message(callback.message.chat.id, f"К сожалению по вашеву запросу не найдено необходимое кол-во отелей")
+        bot.send_message(callback.message.chat.id, f"К сожалению по запросу не найдено необходимое кол-во отелей")
+        logger.info("ID пользователя - {user} | Не нашлось необходимое количество отелей", user=callback.from_user.id)
     bot.send_message(callback.message.chat.id, "Запрос выполнен, выберете следующую команду\n"
                                                "/lowprice - список дешевых отелей\n/highprice - список дорогих отелей\n"
                                                "/bestdeal - список отелей по стоимости и расстоянию до цента\n"

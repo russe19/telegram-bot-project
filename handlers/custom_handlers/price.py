@@ -11,7 +11,6 @@ import locale
 from datetime import date, datetime, timedelta
 from typing import Tuple
 
-from loguru import logger
 from telebot import types
 from telebot.types import Message, CallbackQuery
 from telegram_bot_calendar import LSTEP, DetailedTelegramCalendar
@@ -20,19 +19,19 @@ import api_requests
 from database.sqlite_command import insert_db, connect_sql
 from handlers.custom_handlers.bestdeals import (best_result_photo,
                                                 result_bestdeal)
-from keyboards.inline import city, yes_no
-from loader import bot
+from keyboards.inline import city, yes_no, currency, locale
+from loader import bot, logger
 from states.contact_information import UserInfoState
 
 connect_sql()
 
 sample_locales = {'Английский': 'en_US', 'Французский': 'fr_FR', 'Испанский': 'es_ES',
-                  'Португальский': 'pt_PT', 'Польский': 'pl_PL', 'Русский': 'ru_RU'
+                  'Португальский': 'pt_PT', 'Немецкий': 'de_DE', 'Русский': 'ru_RU'
 }
 
 sample_currency = {'Рубль': 'RUB', 'Евро': 'EUR', 'Доллар': 'USD'}
 
-def info(text: dict) -> Tuple[str, str, str, str, str]:
+def info(text: dict, callback: CallbackQuery) -> Tuple[str, str, str, str, str]:
     """
     Функция предназначена для того, чтобы находить в тексте с помощью регулярных выражений
     необходимые параметры, и выводить их в ответ на запрос телеграмм бота.
@@ -44,14 +43,45 @@ def info(text: dict) -> Tuple[str, str, str, str, str]:
         Функция возращает название отеля, улицу на которой он расположен, расстояние до центра,
             стоимость проживания за сутки и id отеля.
     """
-    h_name = re.search(r"(?<='name': ')[^']+", str(text)) # Название отеля
-    h_street = re.search(r"(?<='streetAddress': ')[^']+", str(text)) # Улица
-    h_dist = re.search(r"(?<='distance': ')[^']+", str(text['landmarks'])) # Расстояние до центра
-    h_cost = re.search(r"(?<='current': ')[^']+", str(text['ratePlan'])) # Стоимость за ночь
-    h_id = (re.search(r"(?<='id': )\w+", str(text))) # ID отеля
-    return h_name.group(), h_street.group(), h_dist.group(), h_cost.group(), h_id.group()
+    print(str(text))
+    name, street, dist, cost, id = '', '', '', '', ''
+    try:
+        h_name = re.search(r"(?<='name': ')[^']+", str(text)) # Название отеля
+        name = h_name.group()
+    except:
+        name == ''
+        logger.info("ID пользователя - {user} | У отеля отсутствует атрибут 'имя'", user=callback.from_user.id)
+    try:
+        h_street = re.search(r"(?<='streetAddress': ')[^']+", str(text)) # Улица
+        street = h_street.group()
+    except:
+        street == ''
+        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'улица'",
+                    user=callback.from_user.id, name=name)
+    try:
+        h_dist = re.search(r"(?<='distance': ')[^']+", str(text['landmarks'])) # Расстояние до центра
+        dist = h_dist.group()
+    except:
+        dist == ''
+        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'расстояние до центра'",
+                    user=callback.from_user.id, name=name)
+    try:
+        h_cost = re.search(r"(?<='current': ')[^']+", str(text['ratePlan'])) # Стоимость за ночь
+        cost = h_cost.group()
+    except:
+        cost == ''
+        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'стоимость за ночь'",
+                    user=callback.from_user.id, name=name)
+    try:
+        h_id = (re.search(r"(?<='id': )\w+", str(text))) # ID отеля
+        id = h_id.group()
+    except:
+        id == ''
+        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'id'",
+                    user=callback.from_user.id, name=name)
+    return name, street, dist, cost, id
 
-def find_photo(endpoint: str, hotel_id: str, photo_count: int) -> list:
+def find_photo(endpoint: str, hotel_id: str, photo_count: int, callback) -> list:
     """
     Функция по id отеля находит определенное количество фотографий.
     Args:
@@ -63,7 +93,7 @@ def find_photo(endpoint: str, hotel_id: str, photo_count: int) -> list:
         photo_list: Список с необходимым количеством фотографий по отелю.
 
     """
-    mod_photo = api_requests.location_processing(endpoint=endpoint, hotel_id=hotel_id)
+    mod_photo = api_requests.location_processing(endpoint=endpoint, hotel_id=hotel_id, user = callback.from_user.id)
     mod_list = re.findall(r"(?<='baseUrl': ')\S+", str(mod_photo))
     photo_list = [i[:-2].format(size='z') for j, i in enumerate(mod_list) if j < photo_count]
     return photo_list
@@ -87,8 +117,8 @@ def result_no(mod_text: dict, callback: CallbackQuery) -> None:
         all_days = (data_low['checkout'] - data_low['checkin']).days
     for i in mod_text['data']["body"]["searchResults"]["results"]:
         if count < number_of_hotels:
-            name, street, dist, cost, id_hotel = info(i)
-            all_cost = int(re.search(r"\d+", cost).group()) * int(all_days)
+            name, street, dist, cost, id_hotel = info(i, callback)
+            all_cost = int(''.join(re.findall(r"[\d+]", cost))) * int(all_days)
             bot.send_message(callback.message.chat.id, f"Название отеля: {name}\nУлица: {street}\n"
                                               f"Расстояние до центра: {dist}\nСтоимость: {cost}\n"
                                                        f"Общая стоимость {all_cost}{data_low['currency']}\n"
@@ -123,15 +153,16 @@ def result_yes(mod_text: dict, callback: CallbackQuery) -> None:
         all_days = (data_low['checkout'] - data_low['checkin']).days # Количество дней между заселением и выселением
     for i in mod_text['data']["body"]["searchResults"]["results"]:
         if count < number_of_hotels:
-            name, street, dist, cost, id_hotel = info(i)
-            all_cost = int(re.search(r"\d+", cost).group()) * int(all_days)
+            name, street, dist, cost, id_hotel = info(i, callback)
+            all_cost = int(''.join(re.findall(r"[\d+]", cost))) * int(all_days)
             text = f"Название отеля: {name}\nУлица: {street}\n" \
                    f"Расстояние до центра: {dist}\nСтоимость: {cost}\n" \
                    f"Общая стоимость {all_cost} {data_low['currency']}\n" \
                    f"Ссылка на отель: https://hotels.com/ho{id_hotel}"
             hotels.append(name)
             count += 1
-            photo_list = find_photo(endpoint = 'properties/get-hotel-photos', hotel_id = id_hotel, photo_count = photo_count)
+            photo_list = find_photo(endpoint = 'properties/get-hotel-photos',
+                                    hotel_id = id_hotel, photo_count = photo_count, callback = callback)
             media.append(types.InputMediaPhoto(media=photo_list[0], caption=text))
             for i_photo in photo_list[1:]:
                 media.append(types.InputMediaPhoto(media=i_photo))
@@ -177,8 +208,9 @@ def lowprice_command(message: Message) -> None:  # Вводим команду l
 
     """
     bot.set_state(message.from_user.id, UserInfoState.locale, message.chat.id)
-    bot.send_message(message.chat.id, f"Привет {message.from_user.first_name}"
-                                      f", введи на каком языке вы хотите вводить город")  # Вводим город
+    # bot.send_message(message.chat.id, f"Привет {message.from_user.first_name}"
+    #                                   f", введи на каком языке вы хотите вводить город")  # Вводим город
+    locale.locale_keyboard(message, sample_locales)
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Да или Нет записываем в список
         if message.text == "Список дешевых отелей" or message.text == "/lowprice":
             data_low['command'] = "lowprice"
@@ -187,40 +219,36 @@ def lowprice_command(message: Message) -> None:  # Вводим команду l
         data_low['time_command'] = datetime.utcfromtimestamp(int(message.date)).strftime('%Y-%m-%d %H:%M:%S')
 
 
-@bot.message_handler(state=UserInfoState.locale)
-def lowprice_locale(message: Message) -> None: # Получаем язык
+@bot.callback_query_handler(func=None, state=UserInfoState.locale)
+def lowprice_locale(callback: CallbackQuery) -> None: # Получаем язык
     """
     Функция получает от пользователя название страны, выбирает соответствующий язык и просит ввести валюту.
     Args:
         message: Название страны
 
     """
-    with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:
-        if message.text.capitalize() in sample_locales:
-            data_low['locale'] = str(sample_locales[message.text.capitalize()])
-            bot.set_state(message.from_user.id, UserInfoState.currency, message.chat.id)
-            bot.send_message(message.chat.id, 'Введите необходимую валюту')
-        else:
-            bot.send_message(message.chat.id, 'Такого языка нет в перечне')
+    bot.edit_message_text('Язык ввода успешно выбран', callback.message.chat.id, callback.message.id)
+    with bot.retrieve_data(callback.from_user.id, callback.message.chat.id) as data_low:
+        data_low['locale'] = callback.data # Записываем в список язык
+    bot.set_state(callback.from_user.id, UserInfoState.currency, callback.message.chat.id)
+    currency.currency_keyboard(callback, sample_currency)
 
 
-@bot.message_handler(state=UserInfoState.currency)
-def lowprice_currency(message: Message) -> None: # Получаем язык
+
+@bot.callback_query_handler(func=None, state=UserInfoState.currency)
+def lowprice_currency(callback: CallbackQuery) -> None: # Получаем валюту
     """
     Функция получает от пользователя название валюты, и просит ввести название города.
     Args:
         message: Название валюты
 
     """
-    with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:
-        if message.text.capitalize() in sample_currency:
-            data_low['currency'] = str(sample_currency[message.text.capitalize()])
-            bot.set_state(message.from_user.id, UserInfoState.low_city, message.chat.id)
-            bot.send_message(message.chat.id, 'Введите название города на соответствующем языке')
-        else:
-            bot.send_message(message.chat.id, 'Такой валюты нет в перечне')
-    with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:
-        bot.send_message(message.chat.id, str(data_low))
+    bot.edit_message_text('Валюта успешно выбрана', callback.message.chat.id, callback.message.id)
+    with bot.retrieve_data(callback.from_user.id, callback.message.chat.id) as data_low:
+        data_low['currency'] = callback.data # Записываем в список валюту
+        print(data_low)
+    bot.set_state(callback.from_user.id, UserInfoState.low_city, callback.message.chat.id)
+    bot.send_message(callback.message.chat.id, 'Введите название города на выбранном языке')
 
 
 
@@ -236,13 +264,19 @@ def lowprice_list_city(message: Message) -> None: # Получаем город
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:
         city_list = api_requests.location_processing(endpoint = api_requests.endpoint_search,
                                                      locale = data_low['locale'], currency = data_low['currency'],
-                                                     city = message.text) # Формируем данные по городу
-    print(city_list)
+                                                     city = message.text, user = message.from_user.id) # Формируем данные по городу
+    # print(city_list)
     try:
         mod_city = city_list['suggestions'][0]['entities'] #  Формируем запрос на получение необходимой информации
-        city.city_keyboard(message, mod_city)
+        if mod_city == []:
+            bot.send_message(message.chat.id, 'Список городов пуст, вожмозно вы ввели название не на том языке, '
+                                              'пожалуйста, повторите попытку')
+            logger.info("ID пользователя - {user} | Полученный список городов пуст", user=message.from_user.id)
+        else:
+            city.city_keyboard(message, mod_city)
     except:
-        print('Что-то пошло не так, введите город заново')
+        bot.send_message(message.chat.id, 'Что-то пошло не так, введите город заново')
+        logger.error("ID пользователя - {user} | Возникла ошибка при обращении к API", user=message.from_user.id)
 
 @bot.callback_query_handler(func=None, state=UserInfoState.low_city)
 def callback_city_id(callback: CallbackQuery) -> None:
@@ -273,8 +307,10 @@ def lowprice_get_num_hotel(message: Message) -> None:  # Вводим кол_в�
     """
     if not message.text.isdigit() or int(message.text) <= 0:
         bot.send_message(message.chat.id, 'Кол-во отелей является положительным числом')
+        logger.info("ID пользователя - {user} | Введено недопустимое кол-во отелей", user=message.from_user.id)
     elif message.text.isdigit() and int(message.text) > 10:
         bot.send_message(message.chat.id, 'Кол-во отелей не может превышать 10')
+        logger.info("ID пользователя - {user} | Введено кол-во отелей превышающее максимум", user=message.from_user.id)
     else:
         with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Берем кол-во отелей
             data_low['number_of_hotels'] = message.text
@@ -322,8 +358,10 @@ def count_photo(message: Message) -> None:  # Вводим необходимо�
         bot.set_state(message.from_user.id, UserInfoState.checkin, message.chat.id)
     elif message.text.isdigit() and int(message.text) > 10:
         bot.send_message(message.chat.id, 'Кол-во фотографий не может превышать 10, введите число заново')
+        logger.info("ID пользователя - {user} | Введено большое кол-во фото", user=message.from_user.id)
     else:
         bot.send_message(message.from_user.id, 'Кол-во фотографий является цифрой')
+        logger.info("ID пользователя - {user} | Неверно введено кол-во фото", user=message.from_user.id)
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data_low:  # Кол-во фото в список
         data_low['photo_count'] = message.text
 
@@ -346,7 +384,8 @@ def call_date(callback: CallbackQuery) -> None:
         bot.edit_message_text(f"Выберите {all_steps[step]}", callback.message.chat.id,
                               callback.message.message_id, reply_markup=key)
     elif result:
-        bot.edit_message_text(f"Дата заселения {result}\nТеперь выберите дату, когда бы вы хотели выселиться", callback.message.chat.id, callback.message.message_id)
+        bot.edit_message_text(f"Дата заселения {result}\nТеперь выберите дату, когда бы вы хотели выселиться",
+                              callback.message.chat.id, callback.message.message_id)
         bot.set_state(callback.from_user.id, UserInfoState.checkout, callback.message.chat.id)
         calendar, step = DetailedTelegramCalendar(calendar_id=2, locale='ru', current_date=today, min_date=today,
                                                  max_date=today + timedelta(days=365)).build()
@@ -377,6 +416,7 @@ def call_date_1(callback: CallbackQuery) -> None:
                               callback.message.message_id, reply_markup=key)
     elif result and (checkin_date > result):
         bot.send_message(callback.message.chat.id, "Дата заселения в отель должна быть раньше, исправьте")
+        logger.info("ID пользователя - {user} | Неверно введена дата выселения из отеля", user=callback.from_user.id)
     elif result:
         bot.edit_message_text(f"Дата выселение {result}\n", callback.message.chat.id, callback.message.message_id)
         bot.send_message(callback.message.chat.id, "Пожалуйста подождите, бот формирует ответ на ваш запрос")
@@ -389,7 +429,7 @@ def call_date_1(callback: CallbackQuery) -> None:
                 lowprice_text = api_requests.location_processing(
                     endpoint='properties/list', locale = data_low['locale'], currency = data_low['currency'],
                     city_id = data_low['id_city'], sort_order = price,
-                    checkin = data_low['checkin'], checkout = data_low['checkout']
+                    checkin = data_low['checkin'], checkout = data_low['checkout'], user = callback.from_user.id
                 )
                 result_photo(data_low['choice_photo'], lowprice_text, callback)
             else:
@@ -400,7 +440,8 @@ def call_date_1(callback: CallbackQuery) -> None:
                         endpoint='properties/list', locale = data_low['locale'], currency = data_low['currency'],
                         city_id=data_low['id_city'], sort_order=price,
                         checkin=data_low['checkin'], checkout=data_low['checkout'],
-                        price_min=data_low['low_price'], price_max=data_low['high_price'], number=i
+                        price_min=data_low['low_price'], price_max=data_low['high_price'], number=i,
+                        user = callback.from_user.id
                     )
                     best_hotels = result_bestdeal(data_low['choice_photo'], bestdeal_text, callback,
                                     data_low['low_dist'], data_low['high_dist'], best_hotels)
