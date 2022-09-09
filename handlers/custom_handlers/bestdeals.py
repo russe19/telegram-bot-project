@@ -1,5 +1,8 @@
-import calendar
-import json
+"""
+В данном модуле реализованы функции, необходимые для получения в телеграмм боте
+информации по отелям в определенном ценовом диапазоне, и находящимся на заданном расстоянии от центра
+"""
+
 import re
 import sqlite3
 from datetime import date, datetime
@@ -34,41 +37,16 @@ def info(text: dict, callback: CallbackQuery) -> Tuple[str, str, str, str, str]:
         Функция возращает название отеля, улицу на которой он расположен, расстояние до центра,
             стоимость проживания за сутки и id отеля.
     """
-    name, street, dist, cost, id = '', '', '', '', ''
+    name = re.search(r"(?<='name': ')[^']+", str(text)).group() # Название отеля
+    street = 'Не указана'
     try:
-        h_name = re.search(r"(?<='name': ')[^']+", str(text)) # Название отеля
-        name = h_name.group()
-    except:
-        name == ''
-        logger.info("ID пользователя - {user} | У отеля отсутствует атрибут 'имя'", user=callback.from_user.id)
-    try:
-        h_street = re.search(r"(?<='streetAddress': ')[^']+", str(text)) # Улица
-        street = h_street.group()
-    except:
-        street == ''
+        street = re.search(r"(?<='streetAddress': ')[^']+", str(text)).group() # Улица
+    except AttributeError:
         logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'улица'",
                     user=callback.from_user.id, name=name)
-    try:
-        h_dist = re.search(r"(?<='distance': ')[^']+", str(text['landmarks'])) # Расстояние до центра
-        dist = h_dist.group()
-    except:
-        dist == ''
-        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'расстояние до центра'",
-                    user=callback.from_user.id, name=name)
-    try:
-        h_cost = re.search(r"(?<='current': ')[^']+", str(text['ratePlan'])) # Стоимость за ночь
-        cost = h_cost.group()
-    except:
-        cost == ''
-        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'стоимость за ночь'",
-                    user=callback.from_user.id, name=name)
-    try:
-        h_id = (re.search(r"(?<='id': )\w+", str(text))) # ID отеля
-        id = h_id.group()
-    except:
-        id == ''
-        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'id'",
-                    user=callback.from_user.id, name=name)
+    dist = re.search(r"(?<='distance': ')[^']+", str(text['landmarks'])).group() # Расстояние до центра
+    cost = re.search(r"(?<='current': ')[^']+", str(text['ratePlan'])).group() # Стоимость за ночь
+    id = (re.search(r"(?<='id': )\w+", str(text))).group() # ID отеля
     return name, street, dist, cost, id
 
 def find_photo(endpoint: str, hotel_id: str, photo_count: int) -> list:
@@ -189,10 +167,6 @@ def bestdead_high_price(message: Message) -> None:  # Максимальное �
         bot.set_state(message.from_user.id, UserInfoState.low_number_of_hotel, message.chat.id)
 
 
-# @bot.message_handler(state=UserInfoState.bestdeal_result)
-# def count_p(message: Message) -> None:  # Вводим необходимое кол-во фотографий
-#     print(341)
-
 def result_bestdeal(choice_photo: str, text: dict, callback: CallbackQuery, low_dist: str, high_dist: str, best_hotels: list) -> None:
     """
 
@@ -208,7 +182,6 @@ def result_bestdeal(choice_photo: str, text: dict, callback: CallbackQuery, low_
         best_hotels: Список с отелями, которые подходят по всем заданным параметрам.
     """
     for i in text['data']["body"]["searchResults"]["results"]:
-        print(i)
         dist = re.search(r"[0-9,]+", i['landmarks'][0]['distance'])
         dist = re.sub(r",", r".", dist.group())
         if float(dist) >= float(low_dist) and float(dist) <= float(high_dist):
@@ -241,8 +214,6 @@ def best_result_no(mod_list: list, callback: CallbackQuery) -> None:
     """
     count = 0
     hotels = []
-    for j in mod_list:
-        print(j, '\n\n')
     with bot.retrieve_data(callback.from_user.id, callback.message.chat.id) as data_low:  # Берем кол-во отелей
         number_of_hotels, time, command = int(data_low['number_of_hotels']), data_low['time_command'], data_low['command']
         all_days = (data_low['checkout'] - data_low['checkin']).days

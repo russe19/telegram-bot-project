@@ -3,10 +3,7 @@
 информации по самым дорогим и самым дешевым отелям в заданном регионе
 """
 
-import calendar
-import json
 import re
-import sqlite3
 import locale
 from datetime import date, datetime, timedelta
 from typing import Tuple
@@ -43,42 +40,16 @@ def info(text: dict, callback: CallbackQuery) -> Tuple[str, str, str, str, str]:
         Функция возращает название отеля, улицу на которой он расположен, расстояние до центра,
             стоимость проживания за сутки и id отеля.
     """
-    print(str(text))
-    name, street, dist, cost, id = '', '', '', '', ''
+    name = re.search(r"(?<='name': ')[^']+", str(text)).group() # Название отеля
+    street = 'Не указана'
     try:
-        h_name = re.search(r"(?<='name': ')[^']+", str(text)) # Название отеля
-        name = h_name.group()
-    except:
-        name == ''
-        logger.info("ID пользователя - {user} | У отеля отсутствует атрибут 'имя'", user=callback.from_user.id)
-    try:
-        h_street = re.search(r"(?<='streetAddress': ')[^']+", str(text)) # Улица
-        street = h_street.group()
-    except:
-        street == ''
+        street = re.search(r"(?<='streetAddress': ')[^']+", str(text)).group() # Улица
+    except AttributeError:
         logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'улица'",
                     user=callback.from_user.id, name=name)
-    try:
-        h_dist = re.search(r"(?<='distance': ')[^']+", str(text['landmarks'])) # Расстояние до центра
-        dist = h_dist.group()
-    except:
-        dist == ''
-        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'расстояние до центра'",
-                    user=callback.from_user.id, name=name)
-    try:
-        h_cost = re.search(r"(?<='current': ')[^']+", str(text['ratePlan'])) # Стоимость за ночь
-        cost = h_cost.group()
-    except:
-        cost == ''
-        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'стоимость за ночь'",
-                    user=callback.from_user.id, name=name)
-    try:
-        h_id = (re.search(r"(?<='id': )\w+", str(text))) # ID отеля
-        id = h_id.group()
-    except:
-        id == ''
-        logger.info("ID пользователя - {user} | У отеля {name} отсутствует атрибут 'id'",
-                    user=callback.from_user.id, name=name)
+    dist = re.search(r"(?<='distance': ')[^']+", str(text['landmarks'])).group() # Расстояние до центра
+    cost = re.search(r"(?<='current': ')[^']+", str(text['ratePlan'])).group() # Стоимость за ночь
+    id = (re.search(r"(?<='id': )\w+", str(text))).group() # ID отеля
     return name, street, dist, cost, id
 
 def find_photo(endpoint: str, hotel_id: str, photo_count: int, callback) -> list:
@@ -246,7 +217,6 @@ def lowprice_currency(callback: CallbackQuery) -> None: # Получаем ва�
     bot.edit_message_text('Валюта успешно выбрана', callback.message.chat.id, callback.message.id)
     with bot.retrieve_data(callback.from_user.id, callback.message.chat.id) as data_low:
         data_low['currency'] = callback.data # Записываем в список валюту
-        print(data_low)
     bot.set_state(callback.from_user.id, UserInfoState.low_city, callback.message.chat.id)
     bot.send_message(callback.message.chat.id, 'Введите название города на выбранном языке')
 
@@ -265,7 +235,6 @@ def lowprice_list_city(message: Message) -> None: # Получаем город
         city_list = api_requests.location_processing(endpoint = api_requests.endpoint_search,
                                                      locale = data_low['locale'], currency = data_low['currency'],
                                                      city = message.text, user = message.from_user.id) # Формируем данные по городу
-    # print(city_list)
     try:
         mod_city = city_list['suggestions'][0]['entities'] #  Формируем запрос на получение необходимой информации
         if mod_city == []:
@@ -274,7 +243,7 @@ def lowprice_list_city(message: Message) -> None: # Получаем город
             logger.info("ID пользователя - {user} | Полученный список городов пуст", user=message.from_user.id)
         else:
             city.city_keyboard(message, mod_city)
-    except:
+    except LookupError:
         bot.send_message(message.chat.id, 'Что-то пошло не так, введите город заново')
         logger.error("ID пользователя - {user} | Возникла ошибка при обращении к API", user=message.from_user.id)
 
