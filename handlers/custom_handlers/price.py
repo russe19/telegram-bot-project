@@ -356,8 +356,9 @@ def call_date(callback: CallbackQuery) -> None:
         bot.edit_message_text(f"Дата заселения {result}\nТеперь выберите дату, когда бы вы хотели выселиться",
                               callback.message.chat.id, callback.message.message_id)
         bot.set_state(callback.from_user.id, UserInfoState.checkout, callback.message.chat.id)
-        calendar, step = DetailedTelegramCalendar(calendar_id=2, locale='ru', current_date=today, min_date=today,
-                                                 max_date=today + timedelta(days=365)).build()
+        calendar, step = DetailedTelegramCalendar(calendar_id=2, locale='ru', current_date=today,
+                                                  min_date=result + timedelta(days=1),
+                                                  max_date=today + timedelta(days=365)).build()
         bot.send_message(callback.message.chat.id, f"Select {LSTEP[step]}", reply_markup=calendar)
 
     with bot.retrieve_data(callback.from_user.id, callback.message.chat.id) as data_low:  # Дата заселения
@@ -375,7 +376,10 @@ def call_date_1(callback: CallbackQuery) -> None:
     """
     all_steps = {'y':'год', 'm':'месяц', 'd':'день'}
     today = date.today()
-    result, key, step = DetailedTelegramCalendar(calendar_id=2, locale='ru', current_date=today, min_date=today,
+    with bot.retrieve_data(callback.from_user.id, callback.message.chat.id) as data_low:  # Дата заселения
+        day_in = data_low['checkin']
+    result, key, step = DetailedTelegramCalendar(calendar_id=2, locale='ru', current_date=today,
+                                                 min_date=day_in + timedelta(days=1),
                                                  max_date=today + timedelta(days=365)).process(callback.data)
     with bot.retrieve_data(callback.from_user.id, callback.message.chat.id) as data_low:  # Дата заселения
         checkin_date = data_low['checkin']
@@ -383,9 +387,6 @@ def call_date_1(callback: CallbackQuery) -> None:
     if not result and key:
         bot.edit_message_text(f"Выберите {all_steps[step]}", callback.message.chat.id,
                               callback.message.message_id, reply_markup=key)
-    elif result and (checkin_date > result):
-        bot.send_message(callback.message.chat.id, "Дата заселения в отель должна быть раньше, исправьте")
-        logger.info("ID пользователя - {user} | Неверно введена дата выселения из отеля", user=callback.from_user.id)
     elif result:
         bot.edit_message_text(f"Дата выселение {result}\n", callback.message.chat.id, callback.message.message_id)
         bot.send_message(callback.message.chat.id, "Пожалуйста подождите, бот формирует ответ на ваш запрос")
