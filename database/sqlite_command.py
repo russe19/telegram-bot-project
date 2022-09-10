@@ -7,14 +7,15 @@ def connect_sql() -> sqlite3.Connection:
     Функция необходима для подключения к базе данных SQLite
 
     """
-    connect = sqlite3.connect('database/database.db')
-    connect.cursor().execute("""CREATE TABLE IF NOT EXISTS data(
-            command TEXT NOT NULL, 
-            time DATE NOT NULL, 
-            hotel TEXT NOT NULL
-        );""")
+    with sqlite3.connect('database/database.db') as connect:
+        connect.cursor().execute("""CREATE TABLE IF NOT EXISTS data(
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                command TEXT NOT NULL, 
+                time DATE NOT NULL, 
+                hotel TEXT NOT NULL
+            );""")
 
-    connect.commit()
+        connect.commit()
 
 
 def insert_db(command: str, time: str, hotels: str) -> None:
@@ -26,10 +27,10 @@ def insert_db(command: str, time: str, hotels: str) -> None:
         hotels: Название всех полученных в конце запроса отелей.
 
     """
-    connect = sqlite3.connect('database/database.db')
-    cursor = connect.cursor()
+    with sqlite3.connect('database/database.db') as connect:
+        cursor = connect.cursor()
 
-    for hotel in hotels:
-        information_on_request = (command, time, hotel)
-        cursor.execute("INSERT INTO data ( command, time, hotel ) VALUES (?, ?, ?);", information_on_request)
-        connect.commit()
+        for hotel in hotels:
+            information_on_request = (command, time, hotel)
+            cursor.execute("INSERT INTO data (command, time, hotel ) VALUES (?, ?, ?);", information_on_request)
+            connect.commit()

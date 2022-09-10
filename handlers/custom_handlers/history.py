@@ -16,18 +16,17 @@ def sql_history(message: Message) -> None:  # Вводим команду histor
         message: Команда history
 
     """
-    connect = sqlite3.connect('database/database.db')
-    cursor = connect.cursor()
-    for i in cursor.execute("SELECT COUNT(command) FROM data"):
-        if i[0] == 0:
-            bot.send_message(message.chat.id, "База данных пуста")
-            connect.commit()
-        else:
-            bot.send_message(message.chat.id, "Последняя запрошенная команда:")
-            for max_time in cursor.execute("SELECT MAX(time) FROM data"):
-                for answer in cursor.execute("SELECT * FROM data WHERE time=(?)", max_time):
-                    bot.send_message(message.chat.id, f"Команда: {answer[0]}\n"
-                                                      f"Время вызова команды: {answer[1]}\nПолученный отель: {answer[2]}")
+    with sqlite3.connect('database/database.db') as connect:
+        cursor = connect.cursor()
+        for i in cursor.execute("SELECT COUNT(command) FROM data"):
+            if i[0] == 0:
+                bot.send_message(message.chat.id, "База данных пуста")
+                connect.commit()
+            else:
+                bot.send_message(message.chat.id, "Выводим 5 последних найденных отеля")
+                for answer in cursor.execute("SELECT * FROM (SELECT * FROM data ORDER BY id DESC LIMIT 5) ORDER BY id"):
+                    bot.send_message(message.chat.id, f"Команда: {answer[1]}\n"
+                                                      f"Время вызова команды: {answer[2]}\nПолученный отель: {answer[3]}")
             connect.commit()
     bot.send_message(message.chat.id, "Запрос выполнен, выберете следующую команду\n"
                                                "/lowprice - список дешевых отелей\n/highprice - список дорогих отелей\n"
